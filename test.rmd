@@ -1,0 +1,28 @@
+```{r}
+library(readr)
+PMData <- read_csv("PRSA_Data_Guanyuan_20130301-20170228.csv")
+# summary(PMData)
+```
+
+```{r}
+PMData_NoNA = na.omit(PMData)
+# View(PMData_NoNA)
+```
+
+```{r}
+PMData_NoNA$PM2.5 = as.numeric(PMData_NoNA$PM2.5)
+```
+
+
+```{r}
+cor(PMData_NoNA$year, PMData_NoNA$PM2.5)
+```
+
+```{r}
+PMData_NoNA$time<-paste(PMData_NoNA$year, PMData_NoNA$month, PMData_NoNA$day, PMData_NoNA$hour)
+```
+
+```{r}
+PMData_NoNA$alt_month = PMData_NoNA$month
+# PMData_NoNA$alt_month
+```

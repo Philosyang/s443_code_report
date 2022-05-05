@@ -1,0 +1,269 @@
+```{r}
+#install.packages("plyr")
+library(plyr)
+#install.packages("tidyr")               
+library("tidyr")
+#install.packages("ggplot2")
+library(ggplot2)
+library(MASS) # for stepwise
+#install.packages("forecast")
+library(forecast)
+library(caret)
+library(knitr)
+```
+
+```{r}
+library(readr)
+PRSA_Data_Guanyuan_20130301_20170228 <- read_csv("PRSA_Data_Guanyuan_20130301-20170228.csv")
+```
+
+
+```{r}
+raw_data<-PRSA_Data_Guanyuan_20130301_20170228[,c("No","year","month","day","hour","PM2.5","PM10","SO2","NO2","CO","O3","TEMP","PRES","DEWP","RAIN","wd","WSPM")]
+```
+
+```{r}
+# View(raw_data)
+```
+
+```{r}
+na_dropped = na.omit(raw_data) #Remove all rows with NA, since they are all NAs from PM2.5 columns
+
+na_dropped$PM2.5 = as.numeric(na_dropped$PM2.5) #Convert char input into numeric input
+```
+
+```{r}
+df2 = subset(na_dropped, select = -c(No, year, month, day, hour, wd))
+# View(df2)
+```
+
+```{r}
+forecasting_pm2.5 = df2$PM2.5[1:(32263-24)]
+full_forecast_pm2.5 = append(rep(0, 24), forecasting_pm2.5)
+```
+
+```{r}
+#full_forecast_pm2.5
+```
+
+
+```{r}
+full_model = lm(PM2.5 ~ ., data = df2)
+stepwise_selection = stepAIC(full_model, direction = "both", trace = FALSE)
+```
+
+
+```{r}
+a = summary(full_model)
+kable(a$coefficients)
+```
+
+```{r}
+summary(stepwise_selection)
+car::vif(stepwise_selection)
+```
+
+# divide dataset into seasons
+```{r}
+seasons = function(x){
+  if(x %in% 2:4) return("Spring")
+  if(x %in% 5:7) return("Summer")
+  if(x %in% 8:10) return("Fall")
+  if(x %in% c(11,12,1)) return("Winter")
+}
+```
+
+```{r}
+df3 = data.frame(na_dropped)
+df3$SEASON = sapply(df3$month, seasons)
+# View(df3)
+```
+
+```{r}
+df3_spring = subset(df3, SEASON == "Spring")
+df3_summer = subset(df3, SEASON == "Summer")
+df3_autumn = subset(df3, SEASON == "Fall")
+df3_winter = subset(df3, SEASON == "Winter")
+```
+
+```{r}
+df3_winter_clean = subset(df3_winter, select = -c(No, year, month, day, hour, wd, SEASON))
+full_model = lm(PM2.5 ~ ., data = df3_winter_clean)
+stepwise_selection = stepAIC(full_model, direction = "both", trace = FALSE)
+```
+
+```{r}
+summary(full_model)
+```
+
+```{r}
+summary(stepwise_selection)
+car::vif(stepwise_selection)
+```
+
+```{r}
+library(dplyr)
+```
+
+```{r}
+df3$Date <- as.Date(with(df3, paste(year, month, day, sep="-")), "%Y-%m-%d")  #combine Year, Month, and Day into Date
+```
+
+```{r}
+df3$YearMonth <- paste(df3$year, df3$month, sep="-")
+```
+
+```{r}
+# https://sscc.wisc.edu/sscc/pubs/dwr/aggregate-tidy.html
+df3_daily <-
+  df3 %>%
+  group_by(Date) %>%
+  summarize(max_daily_pm = max(PM2.5, na.rm = TRUE), min_daily_pm = min(PM2.5, na.rm = TRUE))
+```
+
+```{r}
+# https://sscc.wisc.edu/sscc/pubs/dwr/aggregate-tidy.html
+df3_monthly <-
+  df3 %>%
+  group_by(YearMonth) %>%
+  summarize(max_monthly_pm = max(PM2.5, na.rm = TRUE), min_monthly_pm = min(PM2.5, na.rm = TRUE))
+```
+
+```{r}
+# View(df3_monthly)
+```
+
+```{r}
+typeof(df3_daily$Date[1])
+```
+
+```{r}
+df3_daily$Date[1]
+```
+
+```{r}
+ggplot(data = df3_daily, aes(x = Date, y = max_daily_pm)) +
+  geom_line()+
+  geom_smooth(method="auto", se=TRUE, fullrange=FALSE, level=0.95)+
+  labs(x = "Date",
+    y = "Max PM2.5 per day",
+    title = "test title",
+    subtitle = "test subtitle")
+```
+
+
+```{r}
+ggplot(data = df3_daily, aes(x = Date, y = min_daily_pm)) +
+  geom_line()+
+  geom_smooth(method="auto", se=TRUE, fullrange=FALSE, level=0.95)+
+  labs(x = "Date",
+    y = "Min PM2.5 per day",
+    title = "test title",
+    subtitle = "test subtitle")
+```
+
+
+```{r}
+ggplot(data = df3_monthly, aes(x = YearMonth, y = max_monthly_pm)) +
+  #geom_point() +
+  geom_line(aes(group=1)) +
+  geom_smooth(method="auto", se=TRUE, fullrange=FALSE, level=0.95) +
+  labs(x = "Date",
+    y = "Max PM2.5 per month",
+    title = "test title",
+    subtitle = "test subtitle")
+```
+
+```{r}
+#df3_spring$PM2.5
+```
+
+
+```{r}
+# using caret package, define an 80%/20% train/test split of the dataset
+split=0.80
+trainIndex <- createDataPartition(df2$PM2.5, p=split, list=FALSE)
+data_train <- df2[ trainIndex,]
+data_test <- df2[-trainIndex,]
+# train model
+full_model = lm(PM2.5 ~ ., data = data_train)
+stepwise_selection = stepAIC(full_model, direction = "both", trace = FALSE)
+# make predictions
+x_test <- data_test[,2:11]
+y_test <- data_test[,1]
+predictions <- predict(stepwise_selection, x_test)
+# summarize results
+# error here
+# confusionMatrix(
+#   factor(predictions, levels = 1:6451),
+#   factor(y_test$PM2.5, levels = 1:6451)
+#   )
+# confusionMatrix(
+#   factor(predictions[1:8], levels = 1:8),
+#   factor(y_test$PM2.5[1:8], levels = 1:8)
+#    )
+
+```
+
+```{r}
+delta_pred = predictions - y_test
+sum(delta_pred)
+a = 1:6451
+b=data.frame(a,delta_pred)
+#ggplot(b,aes(a,delta_pred))
+```
+
+```{r}
+ggplot(data = b, aes(x = a, y = PM2.5)) +
+  geom_point() +
+  #geom_line(aes(group=1)) +
+  geom_smooth(method="auto", se=TRUE, fullrange=FALSE, level=0.95) +
+  labs(x = "",
+    y = "difference",
+    title = "Residual plot for full_model")
+```
+
+
+```{r}
+length(predictions)
+is.factor(y_test$PM2.5)
+```
+
+
+```{r}
+y_test$PM2.5
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

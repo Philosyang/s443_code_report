@@ -1,0 +1,170 @@
+```{r}
+#install.packages("plyr")
+library(plyr)
+#install.packages("tidyr")               
+library("tidyr")
+#install.packages("ggplot2")
+library(ggplot2)
+library(knitr)
+```
+
+```{r}
+library(readr)
+PRSA_Data_Guanyuan_20130301_20170228 <- read_csv("PRSA_Data_Guanyuan_20130301-20170228.csv")
+```
+
+
+```{r}
+
+PM2.5<-PRSA_Data_Guanyuan_20130301_20170228[,c('year','month',"day","hour","PM2.5","TEMP","PRES","DEWP","RAIN")]
+# str(PM2.5)
+# 
+# count(PM2.5$year=="2013")
+# count(PM2.5$year=="2014")
+# count(PM2.5$year=="2015")
+# count(PM2.5$year=="2016")
+# count(PM2.5$year=="2017")
+# unique(PM2.5$year)
+# unique(PM2.5$RAIN)
+```
+
+#Clean and manipulate the PM2.5 dataset into pm2.5 dataset
+```{r}
+pm2.5 = na.omit(PM2.5) #Remove all rows with NA, since they are all NAs from PM2.5 columns
+PM2.5 = na.omit(PM2.5) #Remove all rows with NA, since they are all NAs from PM2.5 columns
+
+PM2.5$PM2.5 = as.numeric(PM2.5$PM2.5) #Convert char input into numeric input
+
+pm2.5$PM2.5 = as.numeric(pm2.5$PM2.5) #Convert char input into numeric input
+
+
+pm2.5$Date<-as.Date(with(pm2.5,paste(year,month,day,sep="-")),"%Y-%m-%d") #combine Year, Month, and Day into Date
+pm2.5$groupbymonths<-paste(pm2.5$year,pm2.5$month,sep="-")
+
+a = with(pm2.5,paste(year,month,day,sep="-"))
+b = as.Date(a)
+
+```
+#Calculate the cor and visualize the relationship between Date/year and PM2.5 level
+```{r}
+pm2.5$Date_num<-as.numeric(pm2.5$Date)
+
+cor(pm2.5$Date_num,pm2.5$PM2.5)
+
+ggplot(data = pm2.5, aes(x = Date, y = PM2.5)) +
+  # geom_point()+ 
+  geom_line()+
+  labs(x = "Date",
+    y = "PM2.5 level",
+    title = "PM2.5 level variation by day",
+    subtitle = "2013/3/1-2017-7/28")
+
+boxplot(PM2.5~year,data = pm2.5)
+title("PM2.5 Boxplot over Years")
+
+library(dplyr)
+pm2.5_less <- pm2.5%>%
+  select(-c("Date"))
+# cor(pm2.5_less)
+```
+
+```{r}
+pm2.5_less
+```
+ 
+```{r}
+pm2.5_month<-pm2.5%>%
+  group_by(groupbymonths)%>%
+  summarise_at(vars(PM2.5), list(name = mean))
+ggplot(data = pm2.5_month, aes(x = groupbymonths, y = name)) +
+  geom_point()+
+  geom_line()+
+  labs(x = "Months",
+    y = "Ave.PM2.5 level",
+    title = "PM2.5 level variation by Month",
+    subtitle = "2013/3-2017/7")
+```
+
+```{r}
+dropped = subset(pm2.5, select = -c(groupbymonths, Date_num, year, month, day, hour, Date))
+```
+
+```{r}
+# View(dropped)
+```
+
+
+```{r}
+#View(pm2.5)
+#cor(pm2.5)
+```
+
+```{r}
+keep_month = subset(pm2.5, select = -c(groupbymonths, Date_num, year, day, hour, Date))
+# View(keep_month)
+cor(keep_month)
+```
+
+```{r}
+library(MASS)
+
+full_model = lm(PM2.5 ~ ., data = keep_month)
+stepwise_selection = stepAIC(full_model, direction = "both", trace = FALSE)
+a = summary(stepwise_selection)
+kable(a$r.squared)
+```
+
+```{r}
+kable(car::vif(stepwise_selection))
+```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
